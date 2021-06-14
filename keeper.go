@@ -74,9 +74,15 @@ func syncKeeper(keeperName string) {
         keeperLock.Unlock()
         doTask(keeperName, ke.syncFunc)
         d := ke.interval
-        timeWheel.AfterFunc(d, func() {
-            syncKeeper(keeperName)
-        })
+        keeperLock.Lock()
+        if _, ok := keeperMapper[keeperName]; ok {
+            keeperLock.Unlock()
+            timeWheel.AfterFunc(d, func() {
+                syncKeeper(keeperName)
+            })
+        } else {
+            keeperLock.Unlock()
+        }
         return
     } else {
         keeperLock.Unlock()
