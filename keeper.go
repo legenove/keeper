@@ -36,6 +36,9 @@ func SetKeeper(keeperName string, syncFunc keeperSyncFunc, intervalDuration time
     }
     keeperLock.Lock()
     defer keeperLock.Unlock()
+    if _, ok := keeperMapper[keeperName]; ok {
+        return
+    }
     keeperMapper[keeperName] = kj
     setKeeperToTimeWheel(keeperName, intervalDuration, execNow)
 }
