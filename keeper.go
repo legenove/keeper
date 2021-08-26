@@ -15,6 +15,8 @@ type keeperJob struct {
 
 var keeperMapper = make(map[string]*keeperJob)
 var keeperLock sync.Mutex
+var delayMapper = make(map[string]bool, 1024)
+var delayLock sync.Mutex
 var timeWheel *timingwheel.TimingWheel
 
 func init() {
@@ -56,6 +58,22 @@ func SetDelay(delayName string, syncFunc keeperSyncFunc, intervalDuration time.D
     })
 }
 
+func SetDelayUniq(delayName string, syncFunc keeperSyncFunc, intervalDuration time.Duration) {
+    defer recoverError(delayName)
+    delayLock.Lock()
+    defer delayLock.Unlock()
+    if _, ok := delayMapper[delayName]; ok {
+        return
+    }
+    delayMapper[delayName] = true
+    timeWheel.AfterFunc(intervalDuration, func() {
+        delayLock.Lock()
+        delete(delayMapper, delayName)
+        delayLock.Unlock()
+        syncDelay(delayName, syncFunc)
+    })
+}
+
 func setKeeperToTimeWheel(keeperName string, intervalDuration time.Duration, execNow bool) {
     var d time.Duration
     if execNow {
@@ -75,13 +93,11 @@ func syncKeeper(keeperName string) {
         doTask(keeperName, ke.syncFunc)
         d := ke.interval
         keeperLock.Lock()
+        defer keeperLock.Unlock()
         if _, ok := keeperMapper[keeperName]; ok {
-            keeperLock.Unlock()
             timeWheel.AfterFunc(d, func() {
                 syncKeeper(keeperName)
             })
-        } else {
-            keeperLock.Unlock()
         }
         return
     } else {
